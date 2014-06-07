@@ -1,23 +1,93 @@
 #!/bin/sh -f
 
 # fetched from github.com/jpace/svnx, then the .git directory removed
-FROM_DIR=/tmp/svnx
+SRC_DIR=/proj/org/incava/tresync/test/fixtures
 
 TRESYNC=/proj/org/incava/tresync/bin/tresync.rb
 
 TEST_DIR=/tmp/tresync/testing
 
-FULL_DIR=$TEST_DIR/svnx
-INCR_DIR=$TEST_DIR.1/svnx
+FROM_DIR=$TEST_DIR/from
 
-CHANGED_COPIED_FILE=$FROM_DIR/README.md
-CHANGED_IGNORED_FILE=$FROM_DIR/test/integration/tc.rb
+FULL_DIR=$TEST_DIR/to/tresync
+INCR_DIR=$TEST_DIR.1/to/tresync
+
+CHANGED_COPIED_FILE=$FROM_DIR/backedup/b1.txt
+CHANGED_IGNORED_FILE=$FROM_DIR/ignored/i1.txt
 
 rm -rf $TEST_DIR
 mkdir --parents $TEST_DIR
 
 rm -rf $FULL_DIR
 rm -rf $INCR_DIR
+
+EXPECTED_DIFF_FILE=$TEST_DIR/expected_diff.txt
+ACTUAL_DIFF_FILE=$TEST_DIR/actual_diff.txt
+
+EXPECTED_FIND_FILE=$TEST_DIR/expected_find.txt
+ACTUAL_FIND_FILE=$TEST_DIR/actual_find.txt
+
+compare_diff() {
+    what=$1
+    from=$2
+    to=$3
+    shift; shift; shift
+    output=$@
+
+    echo "running: $what"
+
+    echo $output > $EXPECTED_DIFF_FILE
+    
+    diff -r $from $to > $ACTUAL_DIFF_FILE
+
+    cmp $EXPECTED_DIFF_FILE $ACTUAL_DIFF_FILE
+    if [ "$?" -ne "0" ]; then
+	echo "FAILED: $what"
+	exit 1
+    fi
+
+    echo
+
+    sleep 1
+}
+
+compare_find() {
+    what=$1
+    where=$2
+    shift; shift
+    files=$@
+
+    echo "running: $what"
+
+    echo -n "" > $EXPECTED_FIND_FILE
+
+    for file in $files; do
+	echo $file >> $EXPECTED_FIND_FILE
+    done
+
+    find $where | sort > $ACTUAL_FIND_FILE
+
+    cmp $EXPECTED_FIND_FILE $ACTUAL_FIND_FILE
+    if [ "$?" -ne "0" ]; then
+	echo "FAILED: $what"
+	exit 1
+    fi
+
+    echo
+
+    sleep 1
+}
+
+# -------------------------------------------------------
+# copy test fixture
+# -------------------------------------------------------
+
+mkdir --parents $FROM_DIR
+rsync -rav $SRC_DIR/ $FROM_DIR
+
+echo
+
+sleep 1
 
 # -------------------------------------------------------
 # full backup
@@ -26,36 +96,21 @@ rm -rf $INCR_DIR
 # lots of output from the full backup:
 $TRESYNC $FROM_DIR $FULL_DIR > /dev/null
 
-EXPECTED_FULL_CMP_FILE=/tmp/tresync/expected_full_cmp.txt
-ACTUAL_FULL_CMP_FILE=/tmp/tresync/actual_full_cmp.txt
-
-echo "Only in $FROM_DIR: pkg" > $EXPECTED_FULL_CMP_FILE
-echo "Only in $FROM_DIR/test: integration" >> $EXPECTED_FULL_CMP_FILE
-
-diff -r $FROM_DIR $FULL_DIR > $ACTUAL_FULL_CMP_FILE
-cmp $EXPECTED_FULL_CMP_FILE $ACTUAL_FULL_CMP_FILE || echo "full backup test failed"
+compare_diff "full backup test" $FROM_DIR $FULL_DIR "Only in $FROM_DIR: archived\nOnly in $FROM_DIR: ignored"
 
 # -------------------------------------------------------
 # incremental no change backup
 # -------------------------------------------------------
 
-sleep 1
-
-EXPECTED_EMPTY_INCR_CMP_FILE=$TEST_DIR/expected_empty_incr_cmp.txt
-ACTUAL_EMPTY_INCR_CMP_FILE=$TEST_DIR/actual_empty_incr_cmp.txt
-
-echo $INCR_DIR > $EXPECTED_EMPTY_INCR_CMP_FILE
-
 $TRESYNC $FROM_DIR $FULL_DIR $INCR_DIR
 
-find $INCR_DIR | sort > $ACTUAL_EMPTY_INCR_CMP_FILE
-cmp $EXPECTED_EMPTY_INCR_CMP_FILE $ACTUAL_EMPTY_INCR_CMP_FILE || echo "empty incremental backup failed"
+compare_find "empty incremental backup" $INCR_DIR $INCR_DIR
 
 # -------------------------------------------------------
 # incremental changed backup
 # -------------------------------------------------------
 
-sleep 1
+echo "running incremental backup (with changes) ..."
 
 echo "a new line" >> $CHANGED_COPIED_FILE
 echo "# a new line" >> $CHANGED_IGNORED_FILE
@@ -65,31 +120,40 @@ ACTUAL_CHANGED_INCR_CMP_FILE=$TEST_DIR/actual_changed_incr_cmp.txt
 
 $TRESYNC $FROM_DIR $FULL_DIR $INCR_DIR
 
-find $INCR_DIR | sort > $ACTUAL_CHANGED_INCR_CMP_FILE
+compare_find "changed incremental backup" $INCR_DIR $INCR_DIR "$INCR_DIR/backedup" "$INCR_DIR/backedup/b1.txt"
 
-echo $INCR_DIR > $EXPECTED_CHANGED_INCR_CMP_FILE
-echo "$INCR_DIR/README.md" >> $EXPECTED_CHANGED_INCR_CMP_FILE
+# -------------------------------------------------------
+# restoring from backup
+# -------------------------------------------------------
 
-cmp $EXPECTED_CHANGED_INCR_CMP_FILE $ACTUAL_CHANGED_INCR_CMP_FILE || echo "changed incremental backup failed"
+echo "restoring from full backup ..."
 
-# now do the rsync business ...
-
-RSYNC_TGT_DIR=$TEST_DIR/rsynctgt/svnx
+RSYNC_TGT_DIR=$TEST_DIR/rsyncto
 
 rm -rf $RSYNC_TGT_DIR
 mkdir -p $RSYNC_TGT_DIR
 
 rsync -ra $FULL_DIR/ $RSYNC_TGT_DIR
 
-EXPECTED_FULL_CMP_FILE=$TEST_DIR/expected_full_cmp.txt
-ACTUAL_FULL_CMP_FILE=$TEST_DIR/actual_full_cmp.txt
+expected="Only in /tmp/tresync/testing/from: archived"
+expected="$expected\ndiff -r /tmp/tresync/testing/from/backedup/b1.txt /tmp/tresync/testing/rsyncto/backedup/b1.txt"
+expected="$expected\n2d1"
+expected="$expected\n< a new line"
+expected="$expected\nOnly in /tmp/tresync/testing/from: ignored"
 
-echo "Only in /tmp/svnx: pkg" > $EXPECTED_FULL_CMP_FILE
-echo "diff -r /tmp/svnx/README.md /tmp/tresync/testing/rsynctgt/svnx/README.md" >> $EXPECTED_FULL_CMP_FILE
-echo "42d41" >> $EXPECTED_FULL_CMP_FILE
-echo "< a new line" >> $EXPECTED_FULL_CMP_FILE
-echo "Only in /tmp/svnx/test: integration" >> $EXPECTED_FULL_CMP_FILE
+compare_diff "rsync full sync" $FROM_DIR $RSYNC_TGT_DIR $expected
 
-diff -r $FROM_DIR $RSYNC_TGT_DIR > $ACTUAL_FULL_CMP_FILE
+# -------------------------------------------------------
+# applying incremental backup
+# -------------------------------------------------------
 
-cmp $EXPECTED_FULL_CMP_FILE $ACTUAL_FULL_CMP_FILE || echo "rsync full sync failed"
+echo "applying incremental backup ..."
+
+rsync -ra $INCR_DIR/ $RSYNC_TGT_DIR
+
+expected="Only in /tmp/tresync/testing/from: archived"
+expected="$expected\nOnly in /tmp/tresync/testing/from: ignored"
+
+compare_diff "rsync incremental sync" $FROM_DIR $RSYNC_TGT_DIR $expected
+
+echo "done; restored to: $RSYNC_TGT_DIR"
