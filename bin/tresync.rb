@@ -32,20 +32,17 @@ require 'fileutils'
 #      rsync -rav /media/home/me.1/src /home/me
 #      rsync -rav /media/home/me.2/src /home/me
 
-class PathnameFactory
-  def initialize from, to, dest
-    @from = from
-    @to = to
-    @dest = dest
-    @verbose = true
-  end
 
-  def create name
-    Pathname.new name
-  end
-end
+# I could subclass Pathname to add these methods, and Pathname almost always
+# works fine, doing self.class.new instead of Pathname.new ... usually. However,
+# the Pathname#parent method doing Pathname.new, so it would have none of these
+# methods. Thus I'm monkey-patching instead.
 
 class Pathname
+
+  def self.fullpath name
+    new(name).expand_path
+  end
   def copy to
     puts "copy: #{self} => #{to}" # if $verbose
     FileUtils.cp to_s, to.to_s
@@ -56,122 +53,157 @@ class Pathname
     self.class.new sub(rootfrom.to_s, tgt.to_s)
   end
 
-  def sync_status dest
-    dest_path = dest.to_path
+  def sync_status tgt
+    tgt_path = tgt.to_path
     stat = File.stat to_path
-    sync_permissions dest_path, stat
-    sync_owner dest_path, stat
+    sync_permissions tgt_path, stat
+    sync_owner tgt_path, stat
   end
 
-  def sync_permissions dest_path, stat
-    File.chmod stat.mode, dest_path
+  def sync_permissions tgt_path, stat
+    File.chmod stat.mode, tgt_path
   end
 
-  def sync_owner dest_path, stat
-    File.chown stat.uid, stat.gid, dest_path
+  def sync_owner tgt_path, stat
+    File.chown stat.uid, stat.gid, tgt_path
   end
 end
 
-class Backup
-  SKIP_DIRECTORIES = %w{ .nobackup .archive }
-
-  def initialize from, to, dest = to
-    @from = to_fullpath from
-    @to = to_fullpath to
-    @dest = to_fullpath dest
-    @verbose = true
-
-    @dest.mkpath
-
-    sync @from
-  end
-
-  def to_fullpath what
-    Pathname.new(what).expand_path
-  end
-
-  def to_pathname from_pn
-    from_pn.sub_pathname @from, @to
-  end
-
-  def dest_pathname from_pn
-    from_pn.sub_pathname @from, @dest
-  end
-
-  def copy from_pn, whither
-    from_pn.copy whither
-  end
-
-  def ignore_dir? dir
-    SKIP_DIRECTORIES.find { |fname| (dir + fname).exist? }
-  end
-
-  def sync_status from, dest
-    from.sync_status dest
-  end
-
-  def create_dir from_dir
-    dest = dest_pathname from_dir
-    return if dest.exist?
-    
-    if dest != @dest
-      create_dir from_dir.parent
-    end
-    
-    dest.mkdir
-    from_dir.sync_status dest
-  end
-
-  def create_empty_dir from_dir
-    create_dir from_dir
-  end
-
-  def sync_directory_entries from_dir
-    kids = from_dir.children.sort
-    if kids.empty?
-      create_empty_dir from_dir
-    else
-      kids.each do |kid|
-        sync kid
-      end
-    end
-  end
-
-  def sync_directory from_dir
-    if ignore_dir? from_dir
-      puts "skipping: #{from_dir}" if @verbose
-    else
-      sync_directory_entries from_dir
-    end
-  end
+class FileTrees
+  attr_reader :from
+  attr_reader :to
+  attr_reader :dest
   
+  def initialize from, to, dest = to
+    @from = Pathname.fullpath from
+    @to = Pathname.fullpath to
+    @dest = Pathname.fullpath dest
+    @dest.mkpath
+  end
+
+  def as_to fr
+    fr.sub_pathname @from, @to
+  end
+
+  def as_destination fr
+    fr.sub_pathname @from, @dest
+  end
+
+  def create_dir fromdir
+    dest = as_destination fromdir
+    unless dest.exist?
+      mkdirs dest, fromdir
+    end
+  end
+
+  def mkdirs tgtdir, fromdir
+    if tgtdir != @dest
+      create_dir fromdir.parent
+    end
+    mkdir tgtdir, fromdir
+  end
+
+  def mkdir tgtdir, fromdir
+    tgtdir.mkdir
+    fromdir.sync_status tgtdir
+  end
+
   def copy_file from_file
     create_dir from_file.parent
-    dest = dest_pathname from_file
-    copy from_file, dest
+    dest = as_destination from_file
+    from_file.copy dest
     from_file.sync_status dest
   end
+end
 
-  def to_file_current? from_file
-    to = to_pathname from_file
+class Syncker
+  def ignore_directory? dir
+    false
+  end
+
+  def ignore_file? file
+    false
+  end
+
+  def ignore_other? other
+    false
+  end
+
+  def process_directory dir
+  end
+
+  def process_file file
+  end
+
+  def process_other other
+  end
+
+  def sync_directory dir
+    ignore_directory?(dir) || process_directory(dir)
+  end
+
+  def sync_file file
+    ignore_file?(file) || process_file(file)
+  end
+
+  def sync_other other
+    ignore_other?(other) || process_other(other)
+  end
+  
+  def sync pn
+    if pn.directory?
+      sync_directory pn
+    elsif pn.file?
+      sync_file pn
+    else
+      sync_other pn
+    end
+  end
+end
+
+class Backup < Syncker
+  SKIP_DIRECTORY_FILES = %w{ .nobackup .archive }
+
+  def initialize from, to, dest = to
+    @filetrees = FileTrees.new from, to, dest
+    @verbose = true
+    sync @filetrees.from
+  end
+
+  def ignore_directory? dir
+    ignore = SKIP_DIRECTORY_FILES.find { |fname| (dir + fname).exist? }
+    puts "skipping: #{dir}" if @verbose && ignore
+    ignore
+  end
+
+  def process_each_entry entries
+    entries.each do |entry|
+      sync entry
+    end
+  end
+
+  def process_directory from_dir
+    kids = from_dir.children.sort
+    if kids.empty?
+      @filetrees.create_dir from_dir
+    else
+      process_each_entry kids
+    end
+  end
+
+  def ignore_file? from_file
+    to = @filetrees.as_to from_file
     to.exist? && to.mtime > from_file.mtime
   end
 
-  def sync_file from_file
-    unless to_file_current? from_file
-      copy_file from_file
-    end
+  def process_file from_file
+    @filetrees.copy_file from_file
   end
   
-  def sync from_pn
-    if from_pn.directory?
-      sync_directory from_pn
-    elsif from_pn.file?
-      sync_file from_pn
-    else
-      # @TODO: support for links?
-      $stderr.puts "unhandled file type: #{from_pn}"
-    end
+  def ignore_other? other
+    # @TODO: support for links?
+    $stderr.puts "unhandled file type: #{other}"
+    true
   end
 end
 
