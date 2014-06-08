@@ -45,6 +45,33 @@ class PathnameFactory
   end
 end
 
+class Pathname
+  def copy to
+    puts "copy: #{self} => #{to}" # if $verbose
+    FileUtils.cp to_s, to.to_s
+  end
+
+  def sub_pathname rootfrom, tgt
+    # pathname has #sub now, evidently ...
+    self.class.new sub(rootfrom.to_s, tgt.to_s)
+  end
+
+  def sync_status dest
+    dest_path = dest.to_path
+    stat = File.stat to_path
+    sync_permissions dest_path, stat
+    sync_owner dest_path, stat
+  end
+
+  def sync_permissions dest_path, stat
+    File.chmod stat.mode, dest_path
+  end
+
+  def sync_owner dest_path, stat
+    File.chown stat.uid, stat.gid, dest_path
+  end
+end
+
 class Backup
   SKIP_DIRECTORIES = %w{ .nobackup .archive }
 
@@ -63,27 +90,16 @@ class Backup
     Pathname.new(what).expand_path
   end
 
-  def sub_pathname from_pn, tgt
-    # pathname has #sub now, evidently ...
-    Pathname.new from_pn.sub @from.to_s, tgt.to_s
-  end
-
   def to_pathname from_pn
-    sub_pathname from_pn, @to
+    from_pn.sub_pathname @from, @to
   end
 
   def dest_pathname from_pn
-    sub_pathname from_pn, @dest
+    from_pn.sub_pathname @from, @dest
   end
 
   def copy from_pn, whither
-    puts "copy: #{from_pn} => #{whither}" if @verbose
-    FileUtils.cp from_pn.to_s, whither.to_s
-  end
-
-  def has_file? dir, basename
-    file = dir + basename
-    file.exist?
+    from_pn.copy whither
   end
 
   def ignore_dir? dir
@@ -91,14 +107,7 @@ class Backup
   end
 
   def sync_status from, dest
-    stat = File.stat from.to_path
-    owner = stat.uid
-    group = stat.gid
-    mode = stat.mode
-    
-    dest_path = dest.to_path
-    File.chown owner, group, dest_path
-    File.chmod mode, dest_path
+    from.sync_status dest
   end
 
   def create_dir from_dir
@@ -110,7 +119,7 @@ class Backup
     end
     
     dest.mkdir
-    sync_status from_dir, dest
+    from_dir.sync_status dest
   end
 
   def create_empty_dir from_dir
@@ -140,7 +149,7 @@ class Backup
     create_dir from_file.parent
     dest = dest_pathname from_file
     copy from_file, dest
-    sync_status from_file, dest
+    from_file.sync_status dest
   end
 
   def to_file_current? from_file
