@@ -135,11 +135,11 @@ mkdir -p $RSYNC_TGT_DIR
 
 rsync -ra $FULL_DIR/ $RSYNC_TGT_DIR
 
-expected="Only in /tmp/tresync/testing/from: archived"
-expected="$expected\ndiff -r /tmp/tresync/testing/from/backedup/b1.txt /tmp/tresync/testing/rsyncto/backedup/b1.txt"
+expected="Only in $TEST_DIR/from: archived"
+expected="$expected\ndiff -r $TEST_DIR/from/backedup/b1.txt $TEST_DIR/rsyncto/backedup/b1.txt"
 expected="$expected\n2d1"
 expected="$expected\n< a new line"
-expected="$expected\nOnly in /tmp/tresync/testing/from: ignored"
+expected="$expected\nOnly in $TEST_DIR/from: ignored"
 
 compare_diff "rsync full sync" $FROM_DIR $RSYNC_TGT_DIR $expected
 
@@ -151,8 +151,8 @@ echo "applying incremental backup ..."
 
 rsync -ra $INCR_DIR/ $RSYNC_TGT_DIR
 
-expected="Only in /tmp/tresync/testing/from: archived"
-expected="$expected\nOnly in /tmp/tresync/testing/from: ignored"
+expected="Only in $TEST_DIR/from: archived"
+expected="$expected\nOnly in $TEST_DIR/from: ignored"
 
 compare_diff "rsync incremental sync" $FROM_DIR $RSYNC_TGT_DIR $expected
 

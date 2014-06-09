@@ -35,17 +35,32 @@ require 'fileutils'
 
 # I could subclass Pathname to add these methods, and Pathname almost always
 # works fine, doing self.class.new instead of Pathname.new ... usually. However,
-# the Pathname#parent method doing Pathname.new, so it would have none of these
-# methods. Thus I'm monkey-patching instead.
+# the Pathname#parent method does Pathname.new, so the resulting object would
+# have none of these methods. Thus I'm monkey-patching instead.
 
 class Pathname
-
   def self.fullpath name
     new(name).expand_path
   end
+
   def copy to
     puts "copy: #{self} => #{to}" # if $verbose
+    dir = to.parent
+    origmode = nil
+    unless dir.writable?
+      origmode = dir.make_world_writable
+    end
     FileUtils.cp to_s, to.to_s
+    if origmode
+      dir.chmod origmode
+    end
+  end
+
+  def make_world_writable
+    origmode = stat.mode
+    newmode = origmode | 0222
+    File.chmod newmode, to_s
+    origmode
   end
 
   def sub_pathname rootfrom, tgt
@@ -54,18 +69,9 @@ class Pathname
   end
 
   def sync_status tgt
-    tgt_path = tgt.to_path
-    stat = File.stat to_path
-    sync_permissions tgt_path, stat
-    sync_owner tgt_path, stat
-  end
-
-  def sync_permissions tgt_path, stat
-    File.chmod stat.mode, tgt_path
-  end
-
-  def sync_owner tgt_path, stat
-    File.chown stat.uid, stat.gid, tgt_path
+    st = stat
+    tgt.chmod st.mode
+    tgt.chown st.uid, st.gid
   end
 end
 
@@ -95,7 +101,7 @@ class FileTrees
       mkdirs dest, fromdir
     end
   end
-
+  
   def mkdirs tgtdir, fromdir
     if tgtdir != @dest
       create_dir fromdir.parent
@@ -104,7 +110,15 @@ class FileTrees
   end
 
   def mkdir tgtdir, fromdir
+    par = tgtdir.parent
+    origmode = nil
+    if par.writable?
+      origmode = par.make_world_writable
+    end
     tgtdir.mkdir
+    if origmode
+      par.chmod origmode
+    end
     fromdir.sync_status tgtdir
   end
 
