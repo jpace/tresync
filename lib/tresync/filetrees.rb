@@ -13,6 +13,7 @@ class FileTrees
     @to = Pathname.fullpath to
     @dest = Pathname.fullpath dest
     @dest.mkpath
+    @dirs_created = Array.new
   end
 
   def as_to fr
@@ -38,16 +39,8 @@ class FileTrees
   end
 
   def mkdir tgtdir, fromdir
-    par = tgtdir.parent
-    origmode = nil
-    if par.writable?
-      origmode = par.make_world_writable
-    end
     tgtdir.mkdir
-    if origmode
-      par.chmod origmode
-    end
-    fromdir.sync_status tgtdir
+    @dirs_created << [ tgtdir, fromdir ]
   end
 
   def copy_file from_file
@@ -55,5 +48,21 @@ class FileTrees
     dest = as_destination from_file
     from_file.copy dest
     from_file.sync_status dest
+  end
+
+  def sync_stati
+    # dirs are created top down, so we'll fix permissions bottom up
+    @dirs_created.reverse.each do |tgtdir, fromdir|
+      fromdir.sync_status tgtdir
+    end
+  end
+
+  def copy_link from_link
+    create_dir from_link.parent
+    dest = as_destination from_link
+    from_link.copy_link dest
+    if from_link.exist?
+      from_link.sync_status dest
+    end
   end
 end

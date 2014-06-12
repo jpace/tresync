@@ -18,9 +18,12 @@ class Pathname
     puts "copy: #{self} => #{to}" # if $verbose
     dir = to.parent
     origmode = nil
+
+    # I don't need this now, since all dirs are writable ...
     unless dir.writable?
       origmode = dir.make_world_writable
     end
+    
     FileUtils.cp to_s, to.to_s
     if origmode
       dir.chmod origmode
@@ -43,5 +46,18 @@ class Pathname
     st = stat
     tgt.chmod st.mode
     tgt.chown st.uid, st.gid
+  end
+
+  def copy_link to
+    puts "copy link: #{self} => #{to}" # if $verbose
+    dir = to.parent
+    origmode = nil
+    unless dir.writable?
+      origmode = dir.make_world_writable
+    end
+    FileUtils.copy_entry to_s, to.to_s
+    if origmode
+      dir.chmod origmode
+    end
   end
 end

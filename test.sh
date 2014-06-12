@@ -1,9 +1,10 @@
 #!/bin/sh -f
 
-# fetched from github.com/jpace/svnx, then the .git directory removed
-SRC_DIR=/proj/org/incava/tresync/test/fixtures
+TRESYNC_DIR=/proj/org/incava/tresync
 
-TRESYNC=/proj/org/incava/tresync/bin/tresync.rb
+SRC_DIR=$TRESYNC_DIR/test/fixtures
+
+TRESYNC=$TRESYNC_DIR/bin/tresync
 
 TEST_DIR=/tmp/tresync/testing
 

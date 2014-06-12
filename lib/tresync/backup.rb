@@ -11,6 +11,7 @@ class Backup < Syncker
     @filetrees = FileTrees.new from, to, dest
     @verbose = true
     sync @filetrees.from
+    @filetrees.sync_stati
   end
 
   def ignore_directory? dir
@@ -43,9 +44,27 @@ class Backup < Syncker
     @filetrees.copy_file from_file
   end
   
-  def ignore_other? other
-    # @TODO: support for links?
-    $stderr.puts "unhandled file type: #{other}"
-    true
+  def ignore_other? from_other
+    if from_other.symlink?
+      to = @filetrees.as_to from_other
+      to.symlink?
+    else
+      # others, from Pathname.new('.').methods.sort.select { |m| m[-1] == '?' }
+      
+      # :absolute?, :blockdev?, :chardev?, :directory?, :eql?, :equal?,
+      # :executable?, :executable_real?, :exist?, :file?, :fnmatch?, :frozen?,
+      # :grpowned?, :instance_of?, :instance_variable_defined?, :is_a?,
+      # :kind_of?, :mountpoint?, :nil?, :owned?, :pipe?, :readable?,
+      # :readable_real?, :relative?, :respond_to?, :root?, :setgid?, :setuid?,
+      # :size?, :socket?, :sticky?, :symlink?, :tainted?, :untrusted?,
+      # :world_readable?, :world_writable?, :writable?, :writable_real?, :zero?
+
+      $stderr.puts "unhandled file type: #{from_other}"
+      true
+    end
+  end
+
+  def process_other from_link
+    @filetrees.copy_link from_link
   end
 end
