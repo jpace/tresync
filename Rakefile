@@ -27,7 +27,6 @@ spec = Gem::Specification.new do |s|
   s.version            = "0.0.1"
   s.author             = "Jeff Pace"
   s.email              = "jeugenepace@gmail.com"
-
   s.homepage           = "http://github.com/jpace/#{APP_NAME}"
   s.platform           = Gem::Platform::RUBY
   s.summary            = "Creates full and incremental backups."
@@ -40,7 +39,8 @@ EODESC
   s.has_rdoc           = false
   s.bindir             = 'bin'
   s.executables        = [ APP_NAME ]
-  s.default_executable = {APP_NAME
+  s.default_executable = APP_NAME
+  s.license            = 'MIT'
 end
 
 Gem::PackageTask.new(spec) do |pkg| 

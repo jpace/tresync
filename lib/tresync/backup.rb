@@ -3,19 +3,20 @@
 
 require 'tresync/filetrees'
 require 'tresync/syncker'
+require 'tresync/filter'
 
 class Backup < Syncker
-  SKIP_DIRECTORY_FILES = %w{ .nobackup .archive }
-
   def initialize from, to, dest = to
     @filetrees = FileTrees.new from, to, dest
     @verbose = true
+    @filter = Filter.new 
+
     sync @filetrees.from
     @filetrees.sync_stati
   end
 
   def ignore_directory? dir
-    ignore = SKIP_DIRECTORY_FILES.find { |fname| (dir + fname).exist? }
+    ignore = !dir.readable? || @filter.skip_dir?(dir)
     puts "skipping: #{dir}" if @verbose && ignore
     ignore
   end
@@ -37,7 +38,12 @@ class Backup < Syncker
 
   def ignore_file? from_file
     to = @filetrees.as_to from_file
-    to.exist? && to.mtime > from_file.mtime
+    if from_file.readable?
+      to.exist? && to.mtime > from_file.mtime
+    else
+      $stderr.puts "unreadable file: #{from_file}"
+      true
+    end
   end
 
   def process_file from_file
