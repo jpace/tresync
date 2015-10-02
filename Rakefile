@@ -24,7 +24,7 @@ end
 
 spec = Gem::Specification.new do |s| 
   s.name               = APP_NAME
-  s.version            = "0.0.1"
+  s.version            = "0.0.2"
   s.author             = "Jeff Pace"
   s.email              = "jeugenepace@gmail.com"
   s.homepage           = "http://github.com/jpace/#{APP_NAME}"

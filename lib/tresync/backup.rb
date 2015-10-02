@@ -39,7 +39,7 @@ class Backup < Syncker
   def ignore_file? from_file
     to = @filetrees.as_to from_file
     if from_file.readable?
-      to.exist? && to.mtime > from_file.mtime
+      to.exist? && to.mtime >= from_file.mtime
     else
       $stderr.puts "unreadable file: #{from_file}"
       true
@@ -57,15 +57,35 @@ class Backup < Syncker
     else
       # others, from Pathname.new('.').methods.sort.select { |m| m[-1] == '?' }
       
-      # :absolute?, :blockdev?, :chardev?, :directory?, :eql?, :equal?,
-      # :executable?, :executable_real?, :exist?, :file?, :fnmatch?, :frozen?,
-      # :grpowned?, :instance_of?, :instance_variable_defined?, :is_a?,
-      # :kind_of?, :mountpoint?, :nil?, :owned?, :pipe?, :readable?,
-      # :readable_real?, :relative?, :respond_to?, :root?, :setgid?, :setuid?,
-      # :size?, :socket?, :sticky?, :symlink?, :tainted?, :untrusted?,
-      # :world_readable?, :world_writable?, :writable?, :writable_real?, :zero?
-
       $stderr.puts "unhandled file type: #{from_other}"
+
+      if false
+        $stderr.puts ":absolute?: #{from_other.absolute?}"
+        $stderr.puts ":blockdev?: #{from_other.blockdev?}"
+        $stderr.puts ":chardev?: #{from_other.chardev?}"
+        $stderr.puts ":directory?: #{from_other.directory?}"
+        $stderr.puts ":executable?: #{from_other.executable?}"
+        $stderr.puts ":executable_real?: #{from_other.executable_real?}"
+        $stderr.puts ":exist?: #{from_other.exist?}"
+        $stderr.puts ":file?: #{from_other.file?}"
+        $stderr.puts ":grpowned?: #{from_other.grpowned?}"
+        $stderr.puts ":mountpoint?: #{from_other.mountpoint?}"
+        $stderr.puts ":owned?: #{from_other.owned?}"
+        $stderr.puts ":pipe?: #{from_other.pipe?}"
+        $stderr.puts ":readable?: #{from_other.readable?}"
+        $stderr.puts ":readable_real?: #{from_other.readable_real?}"
+        $stderr.puts ":relative?: #{from_other.relative?}"
+        $stderr.puts ":root?: #{from_other.root?}"
+        $stderr.puts ":size?: #{from_other.size?}"
+        $stderr.puts ":socket?: #{from_other.socket?}"
+        $stderr.puts ":sticky?: #{from_other.sticky?}"
+        $stderr.puts ":symlink?: #{from_other.symlink?}"
+        $stderr.puts ":world_readable?: #{from_other.world_readable?}"
+        $stderr.puts ":world_writable?: #{from_other.world_writable?}"
+        $stderr.puts ":writable?: #{from_other.writable?}"
+        $stderr.puts ":writable_real?: #{from_other.writable_real?}"
+      end
+
       true
     end
   end
